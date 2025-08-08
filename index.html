@@ -1,158 +1,270 @@
+
+<!-- const HOSTEL_LATITUDE = 13.0857315; // Example: India Gate, New Delhi 
+ const HOSTEL_LONGITUDE = 80.0169426; // Example: India Gate, New Delhi -->
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hostel Attendance System</title>
+    <!-- Updated Supabase script tag for better stability -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.4/dist/umd/supabase.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
             font-family: 'Inter', sans-serif;
         }
-        .status-card {
+        .status-card, .login-card, .attendance-card {
             transition: all 0.3s ease-in-out;
+        }
+        /* Hide spinner arrows on number inputs */
+        input[type='number']::-webkit-inner-spin-button,
+        input[type='number']::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type='number'] {
+            -moz-appearance: textfield;
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8">
-        <div class="text-center">
+        <!-- App Title -->
+        <div class="text-center mb-8">
             <h1 class="text-2xl font-bold text-gray-800">Smart Hostel Attendance</h1>
-            <p class="text-gray-500 mt-2">Mark your attendance only when you are inside the hostel premises.</p>
+            <p id="subTitle" class="text-gray-500 mt-2">Enter your college email to continue.</p>
         </div>
 
-        <div id="statusCard" class="status-card mt-8 p-6 rounded-lg text-center border-2">
-            <p id="statusText" class="text-lg font-medium text-gray-700">Checking your location...</p>
-            <div id="spinner" class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mt-4"></div>
+        <!-- Login View -->
+        <div id="loginView">
+            <div class="space-y-4">
+                <input type="email" id="emailInput" placeholder="your-email@ritchennai.edu.in" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button id="proceedBtn" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform hover:scale-105">
+                    Proceed
+                </button>
+            </div>
         </div>
 
-        <div class="mt-8">
-            <button id="attendanceBtn" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none" disabled>
-                Mark My Attendance
-            </button>
+        <!-- Attendance View (hidden by default) -->
+        <div id="attendanceView" class="hidden">
+             <div class="mt-8">
+                <button id="attendanceBtn" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none">
+                    Mark My Attendance
+                </button>
+            </div>
+             <div class="mt-6 text-center">
+                <button id="backBtn" class="text-sm text-gray-500 hover:text-red-600 hover:underline">Go Back</button>
+            </div>
         </div>
+        
+        <!-- Message/Alert Box -->
+        <div id="messageBox" class="hidden mt-4 p-4 rounded-lg text-center"></div>
 
-        <div class="text-center mt-4">
-            <p class="text-xs text-gray-400">
-                Note: This system uses Geolocation. Accuracy may vary indoors. Cheating the system is a punishable offense.
-            </p>
-        </div>
     </div>
 
     <script>
-        // --- CONFIGURATION --- , 
-        // Replace with your hostel's actual latitude and longitude
-        const HOSTEL_LATITUDE =  13.0857315; // Example: India Gate, New Delhi
-        const HOSTEL_LONGITUDE = 80.0169426; // Example: India Gate, New Delhi
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- SUPABASE CONFIGURATION ---
+            const SUPABASE_URL = 'https://ellkrjznrzacrpmwxomi.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsbGtyanpucnphY3JwbXd4b21pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NzE3NTcsImV4cCI6MjA3MDI0Nzc1N30.saZE2XthSXvbn1WmdriPn4SLe_zDO3M-gmk4RropVng';
 
-        // The maximum allowed distance from the hostel in meters.
-        // 100 meters is a reasonable starting point.
-        const MAX_DISTANCE_METERS = 500;
-        // ---------------------
+            // --- GEOLOCATION CONFIGURATION ---
+            const HOSTEL_LATITUDE = 13.0857315; // Example: India Gate, New Delhi 
+            const HOSTEL_LONGITUDE = 80.0169426; // Example: India Gate, New Delhi
+            const MAX_DISTANCE_METERS = 500;
+            const ALLOWED_EMAIL_DOMAIN = 'ritchennai.edu.in';
+            // ---------------------------------
 
-        const attendanceBtn = document.getElementById('attendanceBtn');
-        const statusText = document.getElementById('statusText');
-        const statusCard = document.getElementById('statusCard');
-        const spinner = document.getElementById('spinner');
+            // --- DOM Elements ---
+            const loginView = document.getElementById('loginView');
+            const attendanceView = document.getElementById('attendanceView');
+            const emailInput = document.getElementById('emailInput');
+            const proceedBtn = document.getElementById('proceedBtn');
+            const backBtn = document.getElementById('backBtn');
+            const attendanceBtn = document.getElementById('attendanceBtn');
+            const subTitle = document.getElementById('subTitle');
+            const messageBox = document.getElementById('messageBox');
 
-        window.addEventListener('load', () => {
-            checkLocation();
-        });
-
-        function checkLocation() {
-            if (!navigator.geolocation) {
-                updateStatus('Geolocation is not supported by your browser.', 'error');
-                return;
+            // --- Supabase Client Initialization ---
+            let supabaseClient;
+            try {
+                if (typeof supabase === 'undefined') {
+                    throw new Error("Supabase library not loaded. Check the script tag.");
+                }
+                if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+                    throw new Error("Supabase credentials are not configured.");
+                }
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            } catch (error) {
+                console.error("Supabase init error:", error.message);
+                showMessage("Backend not configured. Please contact admin.", 'error');
             }
 
-            // High accuracy is requested, but might take longer or fail.
-            const options = {
-                enableHighAccuracy: true,
-                timeout: 10000, // 10 seconds
-                maximumAge: 0 // Don't use a cached position
-            };
+            let userEmail = null;
 
-            navigator.geolocation.getCurrentPosition(success, error, options);
-        }
+            // --- Main Logic ---
 
-        function success(position) {
-            const userLat = position.coords.latitude;
-            const userLon = position.coords.longitude;
+            // Handle "Proceed" Button Click
+            proceedBtn.addEventListener('click', () => {
+                const email = emailInput.value.trim();
+                if (!email) {
+                    showMessage('Please enter your email.', 'error');
+                    return;
+                }
+                if (!email.endsWith(ALLOWED_EMAIL_DOMAIN)) {
+                    showMessage(`Please use an email ending with @${ALLOWED_EMAIL_DOMAIN}`, 'error');
+                    return;
+                }
+                
+                userEmail = email;
+                toggleViews(true); // Show attendance view
+            });
 
-            const distance = calculateDistance(userLat, userLon, HOSTEL_LATITUDE, HOSTEL_LONGITUDE);
-
-            if (distance <= MAX_DISTANCE_METERS) {
-                updateStatus(`You are within the hostel area (${distance.toFixed(0)}m away). You can mark your attendance.`, 'success');
-                attendanceBtn.disabled = false;
-            } else {
-                updateStatus(`You are too far from the hostel (${distance.toFixed(0)}m away). Please enter the premises to mark attendance.`, 'error');
+            // Handle "Back" Button Click
+            backBtn.addEventListener('click', () => {
+                userEmail = null;
+                toggleViews(false); // Show login view
+            });
+            
+            // Handle "Mark Attendance" button click
+            attendanceBtn.addEventListener('click', async () => {
                 attendanceBtn.disabled = true;
+                attendanceBtn.textContent = 'Checking...';
+                showMessage('Getting your location...', 'loading');
+
+                try {
+                    const position = await getCurrentLocation();
+                    const { latitude, longitude, accuracy } = position.coords;
+
+                    const distance = calculateDistance(latitude, longitude, HOSTEL_LATITUDE, HOSTEL_LONGITUDE);
+
+                    // If out of range, show warning and stop.
+                    if (distance > MAX_DISTANCE_METERS) {
+                        showMessage('You are not at the hostel.', 'error');
+                        attendanceBtn.disabled = false;
+                        attendanceBtn.textContent = 'Mark My Attendance';
+                        return;
+                    }
+
+                    // If in range, proceed to check if attendance was already marked.
+                    const alreadyMarked = await hasUserMarkedToday(userEmail);
+                    if (alreadyMarked) {
+                         showMessage('Attendance already marked for today.', 'success');
+                         attendanceBtn.textContent = 'Marked Today';
+                         // Keep button disabled
+                         return;
+                    }
+
+                    // If in range and not marked, insert the new record.
+                    const { error } = await supabaseClient.from('attendance').insert({
+                        email: userEmail,
+                        // FIX: Inserting latitude and longitude as separate number fields.
+                        // IMPORTANT: Make sure your Supabase table has 'latitude' and 'longitude' columns of type 'float8'.
+                        latitude: latitude,
+                        longitude: longitude,
+                        accuracy_meters: accuracy
+                    });
+
+                    if (error) throw error;
+                    
+                    showMessage('Attendance marked successfully!', 'success');
+                    attendanceBtn.textContent = 'Marked Today';
+                    // Keep button disabled after successful marking.
+
+                } catch (error) {
+                    console.error('Attendance Error:', error);
+                    showMessage(error.message, 'error');
+                    attendanceBtn.disabled = false;
+                    attendanceBtn.textContent = 'Mark My Attendance';
+                }
+            });
+
+            // --- Helper Functions ---
+
+            // A new function to get location using Promises for cleaner async/await syntax.
+            function getCurrentLocation() {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('Geolocation is not supported by your browser.'));
+                    }
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    });
+                });
             }
-        }
+            
+            async function hasUserMarkedToday(email) {
+                 const today = new Date();
+                 today.setHours(0, 0, 0, 0);
+                 const todayISO = today.toISOString();
 
-        function error(err) {
-            let message = '';
-            switch (err.code) {
-                case err.PERMISSION_DENIED:
-                    message = "Please allow location access to mark attendance.";
-                    break;
-                case err.POSITION_UNAVAILABLE:
-                    message = "Location information is unavailable.";
-                    break;
-                case err.TIMEOUT:
-                    message = "The request to get user location timed out.";
-                    break;
-                default:
-                    message = "An unknown error occurred.";
-                    break;
+                 const tomorrow = new Date(today);
+                 tomorrow.setDate(tomorrow.getDate() + 1);
+                 const tomorrowISO = tomorrow.toISOString();
+
+                 // FIX: Selecting 'email' instead of 'id' to prevent "column does not exist" error.
+                 const { data, error, count } = await supabaseClient
+                     .from('attendance')
+                     .select('email', { count: 'exact' })
+                     .eq('email', email)
+                     .gte('created_at', todayISO)
+                     .lt('created_at', tomorrowISO);
+                
+                 if (error) {
+                    console.error("Error checking attendance:", error);
+                    // Decide how to handle DB errors, maybe allow retry.
+                    return false; 
+                 }
+                 
+                 return count > 0;
             }
-            updateStatus(message, 'error');
-        }
 
-        function updateStatus(message, type) {
-            spinner.style.display = 'none';
-            statusText.textContent = message;
-            statusCard.classList.remove('border-gray-300', 'border-green-500', 'border-red-500');
-            if (type === 'success') {
-                statusCard.classList.add('border-green-500');
-                statusText.classList.add('text-green-700');
-            } else if (type === 'error') {
-                statusCard.classList.add('border-red-500');
-                statusText.classList.add('text-red-700');
-            } else {
-                 statusCard.classList.add('border-gray-300');
+            function toggleViews(isLoggedIn) {
+                if (isLoggedIn) {
+                    loginView.classList.add('hidden');
+                    attendanceView.classList.remove('hidden');
+                    subTitle.textContent = `Ready to mark attendance for ${userEmail}`;
+                } else {
+                    loginView.classList.remove('hidden');
+                    attendanceView.classList.add('hidden');
+                    subTitle.textContent = 'Enter your college email to continue.';
+                }
+                messageBox.classList.add('hidden');
             }
-        }
+            
+            function showMessage(message, type) {
+                messageBox.textContent = message;
+                messageBox.className = 'mt-4 p-4 rounded-lg text-center text-white'; // Reset classes
+                if (type === 'success') {
+                    messageBox.classList.add('bg-green-500');
+                } else if (type === 'error') {
+                    messageBox.classList.add('bg-red-500');
+                } else { // for 'loading' or other info
+                     messageBox.classList.add('bg-blue-500');
+                }
+                messageBox.classList.remove('hidden');
+            }
 
-        /**
-         * Calculates the distance between two GPS coordinates in meters using the Haversine formula.
-         */
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Radius of the Earth in meters
-            const phi1 = lat1 * Math.PI / 180;
-            const phi2 = lat2 * Math.PI / 180;
-            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
-            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
-
-            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-                      Math.cos(phi1) * Math.cos(phi2) *
-                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-            return R * c; // in meters
-        }
-        
-        attendanceBtn.addEventListener('click', () => {
-            // In a real application, you would send a request to your server here.
-            // The server should re-verify the location if possible and also check the IP address.
-            alert('Attendance Marked Successfully!\n(This is a demo. No data was saved.)');
-            attendanceBtn.textContent = 'Attendance Marked';
-            attendanceBtn.disabled = true;
-            attendanceBtn.classList.replace('bg-blue-500', 'bg-green-500');
+            function calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371e3; // meters
+                const phi1 = lat1 * Math.PI / 180;
+                const phi2 = lat2 * Math.PI / 180;
+                const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+                const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                        Math.cos(phi1) * Math.cos(phi2) *
+                        Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            }
         });
-
     </script>
 </body>
 </html>
