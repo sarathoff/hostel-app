@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hostel Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .status-card {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8">
+        <div class="text-center">
+            <h1 class="text-2xl font-bold text-gray-800">Smart Hostel Attendance</h1>
+            <p class="text-gray-500 mt-2">Mark your attendance only when you are inside the hostel premises.</p>
+        </div>
+
+        <div id="statusCard" class="status-card mt-8 p-6 rounded-lg text-center border-2">
+            <p id="statusText" class="text-lg font-medium text-gray-700">Checking your location...</p>
+            <div id="spinner" class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mt-4"></div>
+        </div>
+
+        <div class="mt-8">
+            <button id="attendanceBtn" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none" disabled>
+                Mark My Attendance
+            </button>
+        </div>
+
+        <div class="text-center mt-4">
+            <p class="text-xs text-gray-400">
+                Note: This system uses Geolocation. Accuracy may vary indoors. Cheating the system is a punishable offense.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION --- , 
+        // Replace with your hostel's actual latitude and longitude
+        const HOSTEL_LATITUDE =  13.0857315; // Example: India Gate, New Delhi
+        const HOSTEL_LONGITUDE = 80.0169426; // Example: India Gate, New Delhi
+
+        // The maximum allowed distance from the hostel in meters.
+        // 100 meters is a reasonable starting point.
+        const MAX_DISTANCE_METERS = 500;
+        // ---------------------
+
+        const attendanceBtn = document.getElementById('attendanceBtn');
+        const statusText = document.getElementById('statusText');
+        const statusCard = document.getElementById('statusCard');
+        const spinner = document.getElementById('spinner');
+
+        window.addEventListener('load', () => {
+            checkLocation();
+        });
+
+        function checkLocation() {
+            if (!navigator.geolocation) {
+                updateStatus('Geolocation is not supported by your browser.', 'error');
+                return;
+            }
+
+            // High accuracy is requested, but might take longer or fail.
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000, // 10 seconds
+                maximumAge: 0 // Don't use a cached position
+            };
+
+            navigator.geolocation.getCurrentPosition(success, error, options);
+        }
+
+        function success(position) {
+            const userLat = position.coords.latitude;
+            const userLon = position.coords.longitude;
+
+            const distance = calculateDistance(userLat, userLon, HOSTEL_LATITUDE, HOSTEL_LONGITUDE);
+
+            if (distance <= MAX_DISTANCE_METERS) {
+                updateStatus(`You are within the hostel area (${distance.toFixed(0)}m away). You can mark your attendance.`, 'success');
+                attendanceBtn.disabled = false;
+            } else {
+                updateStatus(`You are too far from the hostel (${distance.toFixed(0)}m away). Please enter the premises to mark attendance.`, 'error');
+                attendanceBtn.disabled = true;
+            }
+        }
+
+        function error(err) {
+            let message = '';
+            switch (err.code) {
+                case err.PERMISSION_DENIED:
+                    message = "Please allow location access to mark attendance.";
+                    break;
+                case err.POSITION_UNAVAILABLE:
+                    message = "Location information is unavailable.";
+                    break;
+                case err.TIMEOUT:
+                    message = "The request to get user location timed out.";
+                    break;
+                default:
+                    message = "An unknown error occurred.";
+                    break;
+            }
+            updateStatus(message, 'error');
+        }
+
+        function updateStatus(message, type) {
+            spinner.style.display = 'none';
+            statusText.textContent = message;
+            statusCard.classList.remove('border-gray-300', 'border-green-500', 'border-red-500');
+            if (type === 'success') {
+                statusCard.classList.add('border-green-500');
+                statusText.classList.add('text-green-700');
+            } else if (type === 'error') {
+                statusCard.classList.add('border-red-500');
+                statusText.classList.add('text-red-700');
+            } else {
+                 statusCard.classList.add('border-gray-300');
+            }
+        }
+
+        /**
+         * Calculates the distance between two GPS coordinates in meters using the Haversine formula.
+         */
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Radius of the Earth in meters
+            const phi1 = lat1 * Math.PI / 180;
+            const phi2 = lat2 * Math.PI / 180;
+            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c; // in meters
+        }
+        
+        attendanceBtn.addEventListener('click', () => {
+            // In a real application, you would send a request to your server here.
+            // The server should re-verify the location if possible and also check the IP address.
+            alert('Attendance Marked Successfully!\n(This is a demo. No data was saved.)');
+            attendanceBtn.textContent = 'Attendance Marked';
+            attendanceBtn.disabled = true;
+            attendanceBtn.classList.replace('bg-blue-500', 'bg-green-500');
+        });
+
+    </script>
+</body>
+</html>
