@@ -231,7 +231,8 @@
                     if (error || !data || data.length === 0) return showResult(false, 'An error occurred.');
                     const result = data[0];
                     showResult(result.is_success, result.status_text);
-                    if (result.is_success) updateSnackButtonState(true);
+                    // Update the button text after the scan result is shown
+                    updateSnackButtonState(true);
                 } else {
                     showResult(false, 'Invalid QR Code Scanned');
                 }
@@ -249,8 +250,9 @@
             }
 
             async function updateSnackButtonState(hasClaimed) {
-                elements.snackTokenBtn.disabled = hasClaimed;
-                elements.snackTokenBtn.textContent = hasClaimed ? 'Token Claimed Today' : 'Claim Snack Token';
+                // This is the key change: the button is never disabled.
+                elements.snackTokenBtn.disabled = false; 
+                elements.snackTokenBtn.textContent = hasClaimed ? 'Token Claimed Today (Scan Again?)' : 'Claim Snack Token';
             }
 
             // --- FEATURE: ISSUE REPORTING ---
