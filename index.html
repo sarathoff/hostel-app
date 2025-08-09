@@ -3,27 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hostel Attendance System</title>
-    <!-- Updated Supabase script tag for better stability -->
+    <title>Hostel App</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.4/dist/umd/supabase.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- QR Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode@2.0.9/dist/html5-qrcode.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-        }
-        .status-card, .login-card, .attendance-card {
-            transition: all 0.3s ease-in-out;
-        }
-        /* Hide spinner arrows on number inputs */
-        input[type='number']::-webkit-inner-spin-button,
-        input[type='number']::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type='number'] {
-            -moz-appearance: textfield;
-        }
+        body { font-family: 'Inter', sans-serif; }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.6); }
+        #qr-reader { border: 2px dashed #cbd5e1; border-radius: 8px; }
     </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
@@ -31,7 +20,7 @@
     <div class="w-full max-w-md mx-auto bg-white rounded-xl shadow-lg p-8">
         <!-- App Title -->
         <div class="text-center mb-8">
-            <h1 class="text-2xl font-bold text-gray-800">Smart Hostel Attendance</h1>
+            <h1 class="text-2xl font-bold text-gray-800">RIT Hostel Portal</h1>
             <p id="subTitle" class="text-gray-500 mt-2">Enter your register number to continue.</p>
         </div>
 
@@ -39,219 +28,123 @@
         <div id="loginView">
             <div class="space-y-4">
                 <input type="text" id="registerNumberInput" placeholder="Enter your register number" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button id="proceedBtn" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform hover:scale-105">
-                    Proceed
-                </button>
+                <button id="proceedBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition">Proceed</button>
             </div>
         </div>
 
-        <!-- Student Details View (hidden by default) -->
+        <!-- Student Details View -->
         <div id="studentDetailsView" class="hidden">
-            <div class="text-center">
+            <div class="text-center bg-gray-50 p-4 rounded-lg">
                 <h2 class="text-xl font-bold text-gray-800" id="studentName"></h2>
-                <p class="text-gray-500" id="studentEmail"></p>
-                <p class="text-gray-500" id="studentRoom"></p>
-                <p class="text-gray-500" id="studentYear"></p>
+                <p class="text-gray-600" id="studentEmail"></p>
+                <p class="text-gray-600" id="studentRoom"></p>
             </div>
-            <div class="mt-8">
-                <button id="attendanceBtn" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none">
-                    Mark My Attendance
-                </button>
+            <div class="mt-6 grid grid-cols-1 gap-4">
+                <button id="attendanceBtn" class="w-full bg-blue-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-600 transition disabled:bg-gray-400">Mark Attendance</button>
+                <button id="snackTokenBtn" class="w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition disabled:bg-gray-400">Claim Snack Token</button>
+                <button id="reportIssueBtn" class="w-full bg-yellow-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-600 transition">Report an Issue</button>
             </div>
             <div class="mt-6 text-center">
                 <button id="backBtn" class="text-sm text-gray-500 hover:text-red-600 hover:underline">Go Back</button>
             </div>
         </div>
         
-        <!-- Message/Alert Box -->
         <div id="messageBox" class="hidden mt-4 p-4 rounded-lg text-center"></div>
+    </div>
 
+    <!-- Modals -->
+    <div id="issueModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md m-4">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Report an Issue</h2>
+            <p class="text-sm text-gray-600 mb-4">Please describe the issue in your room (<span id="issueRoomNumber"></span>).</p>
+            <textarea id="issueDescriptionInput" class="w-full h-24 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="E.g., The fan is not working."></textarea>
+            <div class="mt-6 flex justify-end space-x-4">
+                <button id="cancelIssueBtn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Cancel</button>
+                <button id="submitIssueBtn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Submit Issue</button>
+            </div>
+        </div>
+    </div>
+    <div id="scannerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm m-4">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 text-center">Scan Snack Station QR</h2>
+            <div id="qr-reader" class="w-full"></div>
+            <button id="cancelScanBtn" class="mt-4 w-full px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400">Cancel</button>
+        </div>
+    </div>
+    <div id="resultModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div id="resultContent" class="text-center text-white p-10 rounded-2xl w-full max-w-sm m-4 transform transition-all duration-300 scale-95 opacity-0">
+            <div id="resultIcon" class="text-8xl mb-4 animate-pulse"></div>
+            <h2 id="resultText" class="text-3xl font-bold"></h2>
+            <button id="closeResultBtn" class="mt-8 bg-white/20 px-6 py-2 rounded-lg hover:bg-white/30">Close</button>
+        </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // --- SUPABASE CONFIGURATION ---
+            // --- CONFIGURATION ---
             const SUPABASE_URL = 'https://ellkrjznrzacrpmwxomi.supabase.co';
             const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsbGtyanpucnphY3JwbXd4b21pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NzE3NTcsImV4cCI6MjA3MDI0Nzc1N30.saZE2XthSXvbn1WmdriPn4SLe_zDO3M-gmk4RropVng';
-
-            // --- GEOLOCATION CONFIGURATION ---
-            const HOSTEL_LATITUDE = 13.0857315; // Example: India Gate, New Delhi 
-            const HOSTEL_LONGITUDE = 80.0169426; // Example: India Gate, New Delhi
+            const HOSTEL_LATITUDE = 13.0857315; 
+            const HOSTEL_LONGITUDE = 80.0169426;
             const MAX_DISTANCE_METERS = 500;
-            // ---------------------------------
+            const SNACK_QR_CODE_VALUE = "RIT-HOSTEL-SNACK-TOKEN-V1";
 
-            // --- DOM Elements ---
-            const loginView = document.getElementById('loginView');
-            const studentDetailsView = document.getElementById('studentDetailsView');
-            const registerNumberInput = document.getElementById('registerNumberInput');
-            const proceedBtn = document.getElementById('proceedBtn');
-            const backBtn = document.getElementById('backBtn');
-            const attendanceBtn = document.getElementById('attendanceBtn');
-            const subTitle = document.getElementById('subTitle');
-            const messageBox = document.getElementById('messageBox');
-            const studentName = document.getElementById('studentName');
-            const studentEmail = document.getElementById('studentEmail');
-            const studentRoom = document.getElementById('studentRoom');
-            const studentYear = document.getElementById('studentYear');
+            // --- DOM ELEMENT CACHING ---
+            const elements = {
+                loginView: document.getElementById('loginView'),
+                studentDetailsView: document.getElementById('studentDetailsView'),
+                registerNumberInput: document.getElementById('registerNumberInput'),
+                proceedBtn: document.getElementById('proceedBtn'),
+                backBtn: document.getElementById('backBtn'),
+                attendanceBtn: document.getElementById('attendanceBtn'),
+                reportIssueBtn: document.getElementById('reportIssueBtn'),
+                snackTokenBtn: document.getElementById('snackTokenBtn'),
+                messageBox: document.getElementById('messageBox'),
+                studentName: document.getElementById('studentName'),
+                studentEmail: document.getElementById('studentEmail'),
+                studentRoom: document.getElementById('studentRoom'),
+                issueModal: document.getElementById('issueModal'),
+                issueRoomNumber: document.getElementById('issueRoomNumber'),
+                issueDescriptionInput: document.getElementById('issueDescriptionInput'),
+                cancelIssueBtn: document.getElementById('cancelIssueBtn'),
+                submitIssueBtn: document.getElementById('submitIssueBtn'),
+                scannerModal: document.getElementById('scannerModal'),
+                cancelScanBtn: document.getElementById('cancelScanBtn'),
+                resultModal: document.getElementById('resultModal'),
+                resultContent: document.getElementById('resultContent'),
+                resultIcon: document.getElementById('resultIcon'),
+                resultText: document.getElementById('resultText'),
+                closeResultBtn: document.getElementById('closeResultBtn'),
+                qrReader: document.getElementById('qr-reader'),
+            };
 
-            // --- Supabase Client Initialization ---
+            // --- STATE MANAGEMENT ---
             let supabaseClient;
+            let currentStudent = null;
+            let html5QrCode = null;
+
+            // --- INITIALIZATION ---
             try {
-                if (typeof supabase === 'undefined') {
-                    throw new Error("Supabase library not loaded. Check the script tag.");
-                }
-                if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-                    throw new Error("Supabase credentials are not configured.");
-                }
                 supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             } catch (error) {
-                console.error("Supabase init error:", error.message);
-                showMessage("Backend not configured. Please contact admin.", 'error');
+                console.error("Supabase init error:", error);
+                showMessage("Backend not configured.", 'error');
             }
 
-            let currentStudent = null;
-
-            // --- Main Logic ---
-
-            // Handle "Proceed" Button Click
-            proceedBtn.addEventListener('click', async () => {
-                const registerNumber = registerNumberInput.value.trim();
-                if (!registerNumber) {
-                    showMessage('Please enter your register number.', 'error');
-                    return;
-                }
-                
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('students')
-                        .select('*')
-                        .eq('register_number', registerNumber)
-                        .single();
-
-                    if (error) {
-                        showMessage('Student not found.', 'error');
-                        return;
-                    }
-
-                    currentStudent = data;
-                    studentName.textContent = currentStudent.name;
-                    studentEmail.textContent = currentStudent.email;
-                    studentRoom.textContent = `Room: ${currentStudent.room_number}`;
-                    studentYear.textContent = `Year: ${currentStudent.year_of_studying}`;
-                    toggleViews(true);
-                } catch (error) {
-                    showMessage('An error occurred while fetching student details.', 'error');
-                }
-            });
-
-            // Handle "Back" Button Click
-            backBtn.addEventListener('click', () => {
-                currentStudent = null;
-                toggleViews(false);
-            });
-            
-            // Handle "Mark Attendance" button click
-            attendanceBtn.addEventListener('click', async () => {
-                attendanceBtn.disabled = true;
-                attendanceBtn.textContent = 'Checking...';
-                showMessage('Getting your location...', 'loading');
-
-                try {
-                    const position = await getCurrentLocation();
-                    const { latitude, longitude, accuracy } = position.coords;
-
-                    const distance = calculateDistance(latitude, longitude, HOSTEL_LATITUDE, HOSTEL_LONGITUDE);
-
-                    if (distance > MAX_DISTANCE_METERS) {
-                        showMessage('You are not at the hostel.', 'error');
-                        attendanceBtn.disabled = false;
-                        attendanceBtn.textContent = 'Mark My Attendance';
-                        return;
-                    }
-
-                    const alreadyMarked = await hasUserMarkedToday(currentStudent.register_number);
-                    if (alreadyMarked) {
-                         showMessage('Attendance already marked for today.', 'success');
-                         attendanceBtn.textContent = 'Marked Today';
-                         return;
-                    }
-
-                    const { error } = await supabaseClient.from('attendance').insert({
-                        register_number: currentStudent.register_number,
-                        email: currentStudent.email,
-                        latitude: latitude,
-                        longitude: longitude,
-                        accuracy_meters: accuracy
-                    });
-
-                    if (error) throw error;
-                    
-                    showMessage('Attendance marked successfully!', 'success');
-                    attendanceBtn.textContent = 'Marked Today';
-
-                } catch (error) {
-                    console.error('Attendance Error:', error);
-                    showMessage(error.message, 'error');
-                    attendanceBtn.disabled = false;
-                    attendanceBtn.textContent = 'Mark My Attendance';
-                }
-            });
-
-            // --- Helper Functions ---
-
-            function getCurrentLocation() {
-                return new Promise((resolve, reject) => {
-                    if (!navigator.geolocation) {
-                        reject(new Error('Geolocation is not supported by your browser.'));
-                    }
-                    navigator.geolocation.getCurrentPosition(resolve, reject, {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    });
-                });
-            }
-            
-            async function hasUserMarkedToday(registerNumber) {
-                 try {
-                    const { data, error } = await supabaseClient.rpc('has_marked_attendance_today', {
-                        user_register_number: registerNumber
-                    });
-                    
-                    if (error) {
-                        console.error("Error checking attendance:", error);
-                        return false; 
-                    }
-                    
-                    return data;
-                 } catch (rpcError) {
-                    console.error("RPC call failed:", rpcError);
-                    return false;
-                 }
+            // --- HELPER FUNCTIONS ---
+            function showMessage(message, type = 'info') {
+                elements.messageBox.textContent = message;
+                elements.messageBox.className = 'mt-4 p-4 rounded-lg text-center text-white';
+                const colorClass = type === 'success' ? 'bg-green-500' : (type === 'error' ? 'bg-red-500' : 'bg-blue-500');
+                elements.messageBox.classList.add(colorClass);
+                elements.messageBox.classList.remove('hidden');
             }
 
             function toggleViews(isStudentDetails) {
-                if (isStudentDetails) {
-                    loginView.classList.add('hidden');
-                    studentDetailsView.classList.remove('hidden');
-                } else {
-                    loginView.classList.remove('hidden');
-                    studentDetailsView.classList.add('hidden');
-                }
-                messageBox.classList.add('hidden');
-            }
-            
-            function showMessage(message, type) {
-                messageBox.textContent = message;
-                messageBox.className = 'mt-4 p-4 rounded-lg text-center text-white';
-                if (type === 'success') {
-                    messageBox.classList.add('bg-green-500');
-                } else if (type === 'error') {
-                    messageBox.classList.add('bg-red-500');
-                } else {
-                     messageBox.classList.add('bg-blue-500');
-                }
-                messageBox.classList.remove('hidden');
+                elements.loginView.classList.toggle('hidden', isStudentDetails);
+                elements.studentDetailsView.classList.toggle('hidden', !isStudentDetails);
+                if (!isStudentDetails) currentStudent = null;
+                elements.messageBox.classList.add('hidden');
             }
 
             function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -260,12 +153,180 @@
                 const phi2 = lat2 * Math.PI / 180;
                 const deltaPhi = (lat2 - lat1) * Math.PI / 180;
                 const deltaLambda = (lon2 - lon1) * Math.PI / 180;
-                const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-                        Math.cos(phi1) * Math.cos(phi2) *
-                        Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+                const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) + Math.cos(phi1) * Math.cos(phi2) * Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                 return R * c;
             }
+
+            function getCurrentLocation() {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) return reject(new Error('Geolocation is not supported.'));
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+                });
+            }
+
+            // --- FEATURE: ATTENDANCE ---
+            async function handleAttendance() {
+                elements.attendanceBtn.disabled = true;
+                elements.attendanceBtn.textContent = 'Checking...';
+                showMessage('Getting your location...', 'loading');
+
+                try {
+                    const position = await getCurrentLocation();
+                    const distance = calculateDistance(position.coords.latitude, position.coords.longitude, HOSTEL_LATITUDE, HOSTEL_LONGITUDE);
+                    if (distance > MAX_DISTANCE_METERS) throw new Error('You are not at the hostel.');
+
+                    const { data: alreadyMarked, error: rpcError } = await supabaseClient.rpc('has_marked_attendance_today', { user_register_number: currentStudent.register_number });
+                    if (rpcError) throw rpcError;
+                    if (alreadyMarked) throw new Error('Attendance already marked for today.');
+
+                    const { error: insertError } = await supabaseClient.from('attendance').insert({
+                        register_number: currentStudent.register_number,
+                        email: currentStudent.email,
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        accuracy_meters: position.coords.accuracy
+                    });
+                    if (insertError) throw insertError;
+                    
+                    showMessage('Attendance marked successfully!', 'success');
+                    elements.attendanceBtn.textContent = 'Marked Today';
+                } catch (error) {
+                    showMessage(error.message, 'error');
+                    if (error.message !== 'Attendance already marked for today.') {
+                        elements.attendanceBtn.disabled = false;
+                    }
+                    elements.attendanceBtn.textContent = 'Mark My Attendance';
+                }
+            }
+            
+            async function updateAttendanceButtonState() {
+                const { data: alreadyMarked, error } = await supabaseClient.rpc('has_marked_attendance_today', { user_register_number: currentStudent.register_number });
+                if(error) console.error("Error checking attendance status:", error);
+                elements.attendanceBtn.disabled = alreadyMarked;
+                elements.attendanceBtn.textContent = alreadyMarked ? 'Marked Today' : 'Mark My Attendance';
+            }
+
+            // --- FEATURE: SNACK TOKEN ---
+            function startScanner() {
+                elements.scannerModal.classList.remove('hidden');
+                html5QrCode = new Html5Qrcode("qr-reader");
+                html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, onScanSuccess, () => {}).catch(err => {
+                    showMessage('Could not start QR scanner.', 'error');
+                    stopScanner();
+                });
+            }
+
+            function stopScanner() {
+                if (html5QrCode && html5QrCode.isScanning) {
+                    html5QrCode.stop().catch(err => console.error("Failed to stop scanner", err));
+                }
+                elements.scannerModal.classList.add('hidden');
+            }
+
+            async function onScanSuccess(decodedText) {
+                stopScanner();
+                if (decodedText === SNACK_QR_CODE_VALUE) {
+                    const { data, error } = await supabaseClient.rpc('redeem_snack_token', { user_register_number: currentStudent.register_number });
+                    if (error || !data || data.length === 0) return showResult(false, 'An error occurred.');
+                    const result = data[0];
+                    showResult(result.is_success, result.status_text);
+                    if (result.is_success) updateSnackButtonState(true);
+                } else {
+                    showResult(false, 'Invalid QR Code Scanned');
+                }
+            }
+
+            function showResult(isSuccess, message) {
+                elements.resultModal.classList.remove('hidden');
+                setTimeout(() => {
+                    elements.resultContent.classList.remove('scale-95', 'opacity-0');
+                    elements.resultContent.classList.add('scale-100', 'opacity-100');
+                }, 10);
+                elements.resultContent.className = `text-center text-white p-10 rounded-2xl w-full max-w-sm m-4 transform transition-all duration-300 ${isSuccess ? 'bg-green-500' : 'bg-red-500'}`;
+                elements.resultIcon.innerHTML = isSuccess ? '&#10003;' : '&#10005;';
+                elements.resultText.textContent = message;
+            }
+
+            async function updateSnackButtonState(hasClaimed) {
+                elements.snackTokenBtn.disabled = hasClaimed;
+                elements.snackTokenBtn.textContent = hasClaimed ? 'Token Claimed Today' : 'Claim Snack Token';
+            }
+
+            // --- FEATURE: ISSUE REPORTING ---
+            function handleIssueReport() {
+                const description = elements.issueDescriptionInput.value.trim();
+                if (!description) return showMessage('Please describe the issue.', 'error');
+
+                elements.submitIssueBtn.disabled = true;
+                elements.submitIssueBtn.textContent = 'Submitting...';
+                supabaseClient.from('issues').insert({
+                    register_number: currentStudent.register_number,
+                    room_number: currentStudent.room_number,
+                    description: description
+                }).then(({ error }) => {
+                    if (error) {
+                        showMessage('Failed to report issue.', 'error');
+                    } else {
+                        showMessage('Issue reported successfully!', 'success');
+                        closeIssueModal();
+                    }
+                }).finally(() => {
+                    elements.submitIssueBtn.disabled = false;
+                    elements.submitIssueBtn.textContent = 'Submit Issue';
+                });
+            }
+            
+            function closeIssueModal() {
+                elements.issueModal.classList.add('hidden');
+                elements.issueDescriptionInput.value = '';
+            }
+
+            // --- EVENT LISTENERS ---
+            elements.proceedBtn.addEventListener('click', async () => {
+                const registerNumber = elements.registerNumberInput.value.trim();
+                if (!registerNumber) return showMessage('Please enter your register number.', 'error');
+                
+                elements.proceedBtn.disabled = true;
+                elements.proceedBtn.textContent = 'Fetching...';
+                try {
+                    const { data, error } = await supabaseClient.from('students').select('*').eq('register_number', registerNumber).single();
+                    if (error) throw new Error('Student not found.');
+                    
+                    currentStudent = data;
+                    elements.studentName.textContent = currentStudent.name;
+                    elements.studentEmail.textContent = currentStudent.email;
+                    elements.studentRoom.textContent = `Room: ${currentStudent.room_number}`;
+                    
+                    // Check status of both features
+                    await Promise.all([
+                        updateAttendanceButtonState(),
+                        updateSnackButtonState((await supabaseClient.rpc('get_student_snack_token_status', { user_register_number: currentStudent.register_number })).data)
+                    ]);
+                    
+                    toggleViews(true);
+                } catch (error) {
+                    showMessage(error.message, 'error');
+                } finally {
+                    elements.proceedBtn.disabled = false;
+                    elements.proceedBtn.textContent = 'Proceed';
+                }
+            });
+
+            elements.backBtn.addEventListener('click', () => toggleViews(false));
+            elements.attendanceBtn.addEventListener('click', handleAttendance);
+            elements.reportIssueBtn.addEventListener('click', () => {
+                elements.issueRoomNumber.textContent = currentStudent.room_number;
+                elements.issueModal.classList.remove('hidden');
+            });
+            elements.snackTokenBtn.addEventListener('click', startScanner);
+            elements.cancelScanBtn.addEventListener('click', stopScanner);
+            elements.closeResultBtn.addEventListener('click', () => {
+                elements.resultModal.classList.add('hidden');
+                elements.resultContent.classList.add('scale-95', 'opacity-0');
+            });
+            elements.cancelIssueBtn.addEventListener('click', closeIssueModal);
+            elements.submitIssueBtn.addEventListener('click', handleIssueReport);
         });
     </script>
 </body>

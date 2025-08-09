@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hostel Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.4/dist/umd/supabase.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
+                <h1 class="text-2xl font-bold text-gray-900">Warden's Dashboard</h1>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Total Students</h3>
+                    <p id="totalStudents" class="mt-2 text-3xl font-bold text-gray-900">-</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Attendance Today</h3>
+                    <p id="attendanceToday" class="mt-2 text-3xl font-bold text-green-600">-</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <h3 class="text-sm font-medium text-gray-500">Absent Today</h3>
+                    <p id="absentToday" class="mt-2 text-3xl font-bold text-red-600">-</p>
+                </div>
+            </div>
+
+            <!-- Attendance Table -->
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">Attendance Records</h2>
+                    <div class="flex items-center space-x-4 mt-4 md:mt-0">
+                        <input type="date" id="datePicker" class="border border-gray-300 rounded-lg px-3 py-2">
+                        <button id="refreshBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">Refresh</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Register No.</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Dept.</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceTableBody" class="bg-white divide-y divide-gray-200">
+                             <tr><td colspan="7" class="text-center py-4 text-gray-500">Loading data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Issues Table -->
+            <div class="mt-8 bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Reported Issues</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Register No.</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issuesTableBody" class="bg-white divide-y divide-gray-200">
+                             <tr><td colspan="5" class="text-center py-4 text-gray-500">Loading issues...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- SUPABASE CONFIGURATION ---
+            const SUPABASE_URL = 'https://ellkrjznrzacrpmwxomi.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsbGtyanpucnphY3JwbXd4b21pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NzE3NTcsImV4cCI6MjA3MDI0Nzc1N30.saZE2XthSXvbn1WmdriPn4SLe_zDO3M-gmk4RropVng';
+
+            // --- DOM Elements ---
+            const totalStudentsEl = document.getElementById('totalStudents');
+            const attendanceTodayEl = document.getElementById('attendanceToday');
+            const absentTodayEl = document.getElementById('absentToday');
+            const datePicker = document.getElementById('datePicker');
+            const refreshBtn = document.getElementById('refreshBtn');
+            const attendanceTableBody = document.getElementById('attendanceTableBody');
+            const issuesTableBody = document.getElementById('issuesTableBody');
+
+            // --- Supabase Client Initialization ---
+            let supabaseClient;
+            try {
+                if (typeof supabase === 'undefined') throw new Error("Supabase library not loaded.");
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            } catch (error) {
+                console.error("Supabase init error:", error.message);
+                alert("Could not connect to the database. Please contact support.");
+            }
+
+            // --- Main Functions ---
+
+            function initializeDatePicker() {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                datePicker.value = `${year}-${month}-${day}`;
+            }
+
+            async function loadDashboard() {
+                const selectedDate = datePicker.value;
+                if (!selectedDate) return alert("Please select a date.");
+
+                attendanceTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">Loading data...</td></tr>`;
+                issuesTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">Loading issues...</td></tr>`;
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = 'Loading...';
+
+                try {
+                    const [totalStudents, attendanceRecords, issues] = await Promise.all([
+                        fetchTotalStudents(),
+                        fetchAttendanceForDate(selectedDate),
+                        fetchIssues()
+                    ]);
+                    
+                    const attendanceCount = attendanceRecords.length;
+                    const absentCount = totalStudents - attendanceCount;
+
+                    totalStudentsEl.textContent = totalStudents;
+                    attendanceTodayEl.textContent = attendanceCount;
+                    absentTodayEl.textContent = absentCount >= 0 ? absentCount : 0;
+
+                    populateTable(attendanceRecords);
+                    populateIssuesTable(issues);
+
+                } catch (error) {
+                    console.error("Error loading dashboard:", error);
+                    attendanceTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Failed to load attendance.</td></tr>`;
+                    issuesTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-red-500">Failed to load issues.</td></tr>`;
+                } finally {
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = 'Refresh';
+                }
+            }
+
+            async function fetchTotalStudents() {
+                const { count, error } = await supabaseClient.from('students').select('*', { count: 'exact', head: true });
+                if (error) throw error;
+                return count || 0;
+            }
+
+            async function fetchAttendanceForDate(date) {
+                const { data, error } = await supabaseClient.rpc('get_attendance_by_date', { selected_date: date });
+                if (error) throw error;
+                return data || [];
+            }
+            
+            async function fetchIssues() {
+                const { data, error } = await supabaseClient
+                    .from('issues')
+                    .select('*')
+                    .order('created_at', { ascending: false }); // Show newest issues first
+                if (error) throw error;
+                return data || [];
+            }
+
+            function populateTable(records) {
+                if (records.length === 0) {
+                    attendanceTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">No attendance records found for this date.</td></tr>`;
+                    return;
+                }
+
+                attendanceTableBody.innerHTML = ''; 
+                records.forEach(record => {
+                    const row = document.createElement('tr');
+                    const time = new Date(record.attended_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${record.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.register_number}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.year_of_studying}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.department || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.section || 'N/A'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.room_number}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${time}</td>
+                    `;
+                    attendanceTableBody.appendChild(row);
+                });
+            }
+
+            function populateIssuesTable(records) {
+                if (records.length === 0) {
+                    issuesTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-4 text-gray-500">No open issues.</td></tr>`;
+                    return;
+                }
+
+                issuesTableBody.innerHTML = '';
+                records.forEach(record => {
+                    const row = document.createElement('tr');
+                    const date = new Date(record.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${date}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.room_number}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${record.register_number}</td>
+                        <td class="px-6 py-4 whitespace-normal text-sm text-gray-900">${record.description}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${record.status === 'Open' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
+                                ${record.status}
+                            </span>
+                        </td>
+                    `;
+                    issuesTableBody.appendChild(row);
+                });
+            }
+
+            // --- Event Listeners ---
+            refreshBtn.addEventListener('click', loadDashboard);
+
+            // --- Initial Load ---
+            initializeDatePicker();
+            loadDashboard();
+        });
+    </script>
+</body>
+</html>
